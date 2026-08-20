@@ -2,6 +2,7 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+from scipy.spatial import ConvexHull
 
 # Set page configuration
 st.set_page_config(page_title="Simplex Algorithm Visualizer", layout="wide")
@@ -14,7 +15,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("<div class='main-title'>Simplex Algorithm Visualizer</div>", unsafe_allow_html=True)
-st.caption("Interactive 2D/3D Geometry, Student Tableau Validation, Ratio Calculations, and Orthographic Projections.")
+st.caption("Interactive 2D/3D Geometry, Student Tableau Validation, Ratio Calculations, and Corner-Point Analysis.")
 
 # --- SIDEBAR: PROBLEM CONFIGURATION ---
 st.sidebar.header("1. Problem Parameters")
@@ -181,13 +182,117 @@ else:
 
 # --- GRAPHICAL VISUALIZATIONS ---
 st.markdown("---")
-st.markdown("### Geometric Views & Engineering Projections")
+st.markdown("### Geometric Views")
 
-tab1, tab2 = st.tabs(["3D Objective Surface", "2D Corner Point & Projections"])
+tab1, tab2 = st.tabs(["2D Corner Point & Feasible Region", "3D Objective Surface"])
 
 curr_pt = iter_data['pt']
 
+# Helper to find intersections of constraint boundary lines
+def get_all_intersections(A, b_vec):
+    lines = []
+    # Add constraint boundary lines: a1*x1 + a2*x2 = b
+    for i in range(len(b_vec)):
+        lines.append((A[i][0], A[i][1], b_vec[i]))
+    # Add non-negativity boundaries: x1 = 0, x2 = 0
+    lines.append((1.0, 0.0, 0.0))
+    lines.append((0.0, 1.0, 0.0))
+    
+    points = []
+    n_lines = len(lines)
+    for i in range(n_lines):
+        for j in range(i + 1, n_lines):
+            a1, b1, c1_val = lines[i]
+            a2, b2, c2_val = lines[j]
+            det = a1 * b2 - a2 * b1
+            if abs(det) > 1e-7:
+                x1 = (c1_val * b2 - c2_val * b1) / det
+                x2 = (a1 * c2_val - a2 * c1_val) / det
+                points.append((x1, x2))
+    return points
+
+def is_feasible(pt, A, b_vec):
+    x1, x2 = pt
+    if x1 < -1e-5 or x2 < -1e-5:
+        return False
+    for i in range(len(b_vec)):
+        if A[i][0] * x1 + A[i][1] * x2 > b_vec[i] + 1e-5:
+            return False
+    return True
+
 with tab1:
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    all_pts = get_all_intersections(A, b_vec)
+    
+    # Filter points to basic feasible (BFS) and basic non-feasible (BS)
+    bfs_points = []
+    bs_points = []
+    
+    for p in all_pts:
+        # Ignore points far outside range
+        if -1 <= p[0] <= 10 and -1 <= p[1] <= 10:
+            if is_feasible(p, A, b_vec):
+                if not any(np.allclose(p, existing, atol=1e-4) for existing in bfs_points):
+                    bfs_points.append(p)
+            else:
+                if not any(np.allclose(p, existing, atol=1e-4) for existing in bs_points):
+                    bs_points.append(p)
+                    
+    # Fill Feasible Region using Convex Hull of BFS
+    if len(bfs_points) >= 3:
+        pts_arr = np.array(bfs_points)
+        hull = ConvexHull(pts_arr)
+        hull_pts = pts_arr[hull.vertices]
+        
+        # Shade Feasible Region
+        ax.fill(hull_pts[:, 0], hull_pts[:, 1], color='#2ea043', alpha=0.35, label='Feasible Region')
+        
+        # Draw Bold Feasible Boundaries
+        for sim in hull.simplices:
+            ax.plot(pts_arr[sim, 0], pts_arr[sim, 1], color='#3fb950', linewidth=3.5)
+
+    # Plot Constraint Lines
+    x_grid = np.linspace(-0.5, 5.0, 400)
+    for i in range(len(b_vec)):
+        a1_val, a2_val = A[i]
+        if abs(a2_val) > 1e-5:
+            y_grid = (b_vec[i] - a1_val * x_grid) / a2_val
+            ax.plot(x_grid, y_grid, label=f'C{i+1}: {a1_val}x1 + {a2_val}x2 <= {b_vec[i]}', linestyle='--', linewidth=1.8)
+        else:
+            ax.axvline(x=b_vec[i]/a1_val, label=f'C{i+1}: {a1_val}x1 <= {b_vec[i]}', linestyle='--', linewidth=1.8)
+
+    # Plot Basic Solutions (Infeasible Intersections) - High Contrast Red/Orange
+    if bs_points:
+        bs_arr = np.array(bs_points)
+        ax.scatter(bs_arr[:, 0], bs_arr[:, 1], color='#f85149', s=90, marker='X', zorder=4, label='Basic Solution (Infeasible)')
+
+    # Plot Basic Feasible Solutions - High Contrast Cyan/Blue
+    if bfs_points:
+        bfs_arr = np.array(bfs_points)
+        ax.scatter(bfs_arr[:, 0], bfs_arr[:, 1], color='#58a6ff', s=110, marker='o', zorder=5, label='Basic Feasible Solution (BFS)')
+
+    # Step Trajectory Vector Arrow
+    if not iter_data['is_optimal'] and iter_data['key_row'] != -1:
+        next_pt = iterations[selected_step + 1]['pt'] if selected_step + 1 < len(iterations) else curr_pt
+        if next_pt != curr_pt:
+            ax.annotate('', xy=(next_pt[0], next_pt[1]), xytext=(curr_pt[0], curr_pt[1]),
+                         arrowprops=dict(facecolor='#d29922', edgecolor='#d29922', shrink=0.05, width=2.5, headwidth=9))
+
+    # Current Simplex Corner Point Indicator
+    ax.scatter([curr_pt[0]], [curr_pt[1]], color='#f0883e', s=220, zorder=6, edgecolors='white', linewidth=2, label='Current Iteration Point')
+
+    ax.set_xlim(-0.5, 4.0)
+    ax.set_ylim(-0.5, 4.0)
+    ax.set_title("Feasible Region & Corner Point Trajectory", fontweight='bold', fontsize=14, color='#58a6ff')
+    ax.set_xlabel("x1", fontsize=12)
+    ax.set_ylabel("x2", fontsize=12)
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=9, loc='upper right')
+
+    st.pyplot(fig)
+
+with tab2:
     x1_a = np.linspace(0, 4, 30)
     x2_a = np.linspace(0, 4, 30)
     X1, X2 = np.meshgrid(x1_a, x2_a)
@@ -207,58 +312,5 @@ with tab1:
                                 text=[f"Iter {i}" for i in range(len(px))]))
     
     fig3d.update_layout(scene=dict(xaxis_title='x1', yaxis_title='x2', zaxis_title='Z Elevation'),
-                        margin=dict(l=0, r=0, b=0, t=30), height=450, template="plotly_dark")
+                        margin=dict(l=0, r=0, b=0, t=30), height=550, template="plotly_dark")
     st.plotly_chart(fig3d, use_container_width=True)
-
-with tab2:
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
-    
-    # 2D Trajectory
-    ax1 = axes[0]
-    x_grid = np.linspace(0, 4, 300)
-    for i in range(len(b_vec)):
-        a1_val, a2_val = A[i]
-        if a2_val != 0:
-            y_grid = (b_vec[i] - a1_val*x_grid) / a2_val
-            ax1.plot(x_grid, y_grid, label=f'C{i+1}: {a1_val}x1+{a2_val}x2<={b_vec[i]}', linestyle='--')
-        else:
-            ax1.axvline(x=b_vec[i]/a1_val, label=f'C{i+1}: {a1_val}x1<={b_vec[i]}', linestyle='--')
-            
-    if not iter_data['is_optimal'] and iter_data['key_row'] != -1:
-        next_pt = iterations[selected_step + 1]['pt'] if selected_step + 1 < len(iterations) else curr_pt
-        if next_pt != curr_pt:
-            ax1.annotate('', xy=(next_pt[0], next_pt[1]), xytext=(curr_pt[0], curr_pt[1]),
-                         arrowprops=dict(facecolor='#fab387', edgecolor='#fab387', shrink=0.08, width=2, headwidth=8))
-
-    ax1.scatter([curr_pt[0]], [curr_pt[1]], color='#f38ba8', s=120, zorder=5, label='Current Point')
-    ax1.set_xlim(-0.2, 3.5)
-    ax1.set_ylim(-0.2, 3.5)
-    ax1.set_title("2D Simplex Corner Path", fontweight='bold', color='#89b4fa')
-    ax1.set_xlabel("x1")
-    ax1.set_ylabel("x2")
-    ax1.grid(True, alpha=0.3)
-    ax1.legend(fontsize=7, loc='upper right')
-
-    # Top Projection
-    ax2 = axes[1]
-    ax2.scatter([curr_pt[0]], [curr_pt[1]], color='#89dceb', s=100)
-    ax2.set_title("Top View (x1 vs x2)", fontweight='bold', color='#89dceb')
-    ax2.set_xlabel("x1")
-    ax2.set_ylabel("x2")
-    ax2.set_xlim(-0.2, 3.5)
-    ax2.set_ylim(-0.2, 3.5)
-    ax2.grid(True, alpha=0.3)
-
-    # Side Projection
-    ax3 = axes[2]
-    curr_z = c1*curr_pt[0] + c2*curr_pt[1]
-    ax3.plot(px, pz, 'm--o', label='Trajectory Path')
-    ax3.scatter([curr_pt[0]], [curr_z], color='#a6e3a1', s=120, label='Current Z')
-    ax3.set_title("Side View (x1 vs Z Elevation)", fontweight='bold', color='#a6e3a1')
-    ax3.set_xlabel("x1")
-    ax3.set_ylabel("Z Value")
-    ax3.grid(True, alpha=0.3)
-    ax3.legend(fontsize=7)
-
-    plt.tight_layout()
-    st.pyplot(fig)
