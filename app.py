@@ -6,13 +6,13 @@ import plotly.graph_objects as go
 # Set page configuration
 st.set_page_config(page_title="Simplex Practice & Visualizer", layout="wide")
 
-# Custom CSS for UI styling, blinking error effects, and textbook table layout
+# Custom CSS for bordered tables, blinking errors, and high-contrast visuals
 st.markdown("""
 <style>
     .main-title { font-size: 26px; font-weight: bold; color: #89b4fa; }
     .card { background-color: #1e1e2e; padding: 15px; border-radius: 10px; border: 1px solid #45475a; margin-bottom: 15px; }
     
-    /* Blinking error styling for incorrect inputs */
+    /* Blinking error styling */
     @keyframes blinker {
         50% { opacity: 0.2; background-color: #f85149; }
     }
@@ -20,31 +20,39 @@ st.markdown("""
         border: 2px solid #f85149 !important;
         border-radius: 5px;
         animation: blinker 1s linear infinite;
-        padding: 5px;
+        padding: 8px;
         color: #ff7b72;
         font-weight: bold;
-        margin-bottom: 5px;
+        margin-bottom: 6px;
     }
     
-    /* Textbook Table Layout Styling */
-    .table-header-group {
+    /* Bordered Simplex Tableau Container */
+    .tableau-box {
+        border: 2px solid #89b4fa;
+        border-radius: 8px;
+        padding: 12px;
+        background-color: #181825;
+        margin-bottom: 20px;
+    }
+    .table-group-header {
         text-align: center;
         font-weight: bold;
-        font-size: 16px;
+        font-size: 15px;
+        color: #89b4fa;
         border-bottom: 2px solid #89b4fa;
-        margin-bottom: 10px;
-        padding-bottom: 5px;
+        padding-bottom: 4px;
+        margin-bottom: 8px;
     }
     .dotted-divider {
         border-top: 2px dashed #89b4fa;
         margin-top: 8px;
-        margin-bottom: 12px;
+        margin-bottom: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='main-title'>Simplex Method Practice & Step Visualizer</div>", unsafe_allow_html=True)
-st.caption("Textbook-Style Table | Practice Row Operations | Automated Verification & Blinking Errors")
+st.markdown("<div class='main-title'>Simplex Method Practice & Interactive Visualizer</div>", unsafe_allow_html=True)
+st.caption("Bordered Tableau Layout | Zeroth Iteration Indexing | Interactive 2D & 3D Geometry")
 
 # --- SIDEBAR: PROBLEM INPUTS ---
 st.sidebar.header("1. Problem Formulation")
@@ -157,14 +165,19 @@ if 'step_verified' not in st.session_state:
 step = st.session_state.current_step
 iter_data = iterations[min(step, len(iterations)-1)]
 
+# Text Label for Iteration Number
+iter_title = "Zeroth Iteration" if step == 0 else f"Iteration {step}"
+
 # --- SIMPLEX TABLE PRACTICE SECTION ---
-st.markdown(f"### Table (Iteration {step+1})")
+st.markdown(f"### Simplex Table ({iter_title})")
 
-# Header grouping spans "Coefficients of" over variable columns
+st.markdown("<div class='tableau-box'>", unsafe_allow_html=True)
+
+# 1. Single-Line Grouped Header for Variables
 cols_top = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.8, 1.5])
-cols_top[2].markdown(f"<div class='table-header-group'>Coefficients of</div>", unsafe_allow_html=True)
+cols_top[2].markdown(f"<div class='table-group-header'>Coefficients of {' , '.join(headers)}</div>", unsafe_allow_html=True)
 
-# Main Header Row
+# 2. Main Column Headers
 header_cols = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.8, 1.5])
 header_cols[0].markdown("**Iteration Number**")
 header_cols[1].markdown("**Basic Variables**")
@@ -173,9 +186,9 @@ for idx, h in enumerate(headers):
 header_cols[-2].markdown("**R.H.S. Solution**")
 header_cols[-1].markdown("**Ratio**")
 
-# Row 1: Objective function Z row
+# 3. Z Row
 z_cols = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.8, 1.5])
-z_cols[0].markdown(f"**{step+1}**")
+z_cols[0].markdown(f"**{step}**")
 z_cols[1].markdown("**z**")
 
 user_z_inputs = []
@@ -185,14 +198,11 @@ for j in range(len(headers)):
 
 z_val_inp = z_cols[-2].number_input(f"Z_b", value=0.0, step=0.1, key=f"z_b_{step}", label_visibility="collapsed")
 user_z_inputs.append(z_val_inp)
-
-# Ratio for Z row is not applicable
 z_cols[-1].markdown("—")
 
-# Dashed line separating Z row from constraints (matching the textbook image)
 st.markdown("<div class='dotted-divider'></div>", unsafe_allow_html=True)
 
-# Rows 2+: Basic Variables
+# 4. Basic Variables Rows
 user_table_inputs = []
 expected_table = iter_data['table']
 basis_indices = iter_data['basis']
@@ -202,7 +212,7 @@ for i in range(n_s):
     b_var_name = headers[b_var_idx]
     
     cols = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.8, 1.5])
-    cols[0].write("") # Blank iteration number for basic variable rows
+    cols[0].write("")
     cols[1].markdown(f"**{b_var_name}**")
     
     row_inputs = []
@@ -212,7 +222,7 @@ for i in range(n_s):
         
     b_val_inp = cols[-2].number_input(f"R{i+1}_b", value=0.0, step=0.1, key=f"b_{step}_{i}", label_visibility="collapsed")
     
-    # Ratio column: Remains blank until student completes filling and verifies table
+    # Ratios stay unpopulated until table is completely verified
     if st.session_state.step_verified and not iter_data['is_optimal']:
         if iter_data['key_col'] != -1 and iter_data['key_col'] < len(headers):
             cv = expected_table[i, iter_data['key_col']]
@@ -226,8 +236,9 @@ for i in range(n_s):
         
     user_table_inputs.append(row_inputs + [b_val_inp])
 
+st.markdown("</div>", unsafe_allow_html=True)
+
 # --- VERIFICATION BUTTON & ERROR HANDLING ---
-st.markdown("<br>", unsafe_allow_html=True)
 btn_verify = st.button("I am finished with filling up the table", type="primary")
 
 if btn_verify:
@@ -255,11 +266,11 @@ if btn_verify:
                 error_log.append((i, j, f"Row ({headers[basis_indices[i]]}), Column '{col_label}': Expected `{exp_v:.2f}`, got `{user_v:.2f}`"))
 
     if has_error:
-        st.error("⚠️ Calculation mistakes detected! Check the entries highlighted below:")
+        st.error("⚠️ Mistakes detected in tableau inputs! Check errors below:")
         for err in error_log:
             st.markdown(f"<div class='blink-error'>❌ {err[2]}</div>", unsafe_allow_html=True)
     else:
-        st.success("✅ Table correctly filled! Ratios and pivot conditions are now calculated below.")
+        st.success("✅ Table correctly filled! Ratios and pivot conditions are calculated below.")
         st.session_state.step_verified = True
         st.rerun()
 
@@ -275,8 +286,8 @@ if st.session_state.step_verified:
         <div style='background-color: #1b4721; padding: 20px; border-radius: 10px; border: 2px solid #2ea043;'>
             <h3 style='color: #3fb950; margin:0;'>🎉 Optimality Condition Satisfied!</h3>
             <p style='font-size: 16px; color: #e6edf3; margin-top: 10px;'>
-                Since all coefficients in the objective equation (Z-row) are non-negative (&ge; 0), the optimal solution is obtained.<br>
-                <b>Optimal Values:</b> x<sub>1</sub> = {pt[0]:.2f}, x<sub>2</sub> = {pt[1]:.2f}<br>
+                Since all coefficients in the objective equation (Z-row) are non-negative (&ge; 0), the solution is optimal.<br>
+                <b>Optimal Coordinates:</b> x<sub>1</sub> = {pt[0]:.2f}, x<sub>2</sub> = {pt[1]:.2f}<br>
                 <b>Maximum Objective Value Z:</b> {max_z:.2f}
             </p>
         </div>
@@ -292,22 +303,23 @@ if st.session_state.step_verified:
         st.warning("Negative coefficients present in Z-row. Optimality condition NOT satisfied.")
         
         col_p1, col_p2, col_p3, col_p4 = st.columns(4)
-        col_p1.metric("Key Column (Entering Var)", entering_var, help="Most negative coefficient in Z-row")
-        col_p2.metric("Key Row (Leaving Var)", leaving_var, help="Minimum positive replacement ratio")
-        col_p3.metric("Key Element (Pivot)", f"{pivot_val:.2f}", help="Intersection element of Key Column and Key Row")
+        col_p1.metric("Key Column (Entering Var)", entering_var)
+        col_p2.metric("Key Row (Leaving Var)", leaving_var)
+        col_p3.metric("Key Element (Pivot)", f"{pivot_val:.2f}")
         col_p4.metric("Basis Variable Replacement", f"{leaving_var} ➔ {entering_var}")
         
         if step < len(iterations) - 1:
-            if st.button("Form New Table for Next Iteration ➔", type="secondary"):
+            next_iter_label = f"Iteration {step + 1}"
+            if st.button(f"Form New Table for {next_iter_label} ➔", type="secondary"):
                 st.session_state.current_step += 1
                 st.session_state.step_verified = False
                 st.rerun()
 
 # --- GRAPHICAL VISUALIZATION (2D & 3D) ---
 st.markdown("---")
-st.markdown("### Geometry & Coordinate Axes View")
+st.markdown("### Geometry & Coordinate Trajectory View")
 
-tab1, tab2 = st.tabs(["2D Corner Trajectory & Highlighted Axes", "3D Objective Surface"])
+tab1, tab2 = st.tabs(["2D Corner Trajectory & Feasible Region", "3D Objective Surface & Base Projection"])
 
 curr_pt = iter_data['pt']
 
@@ -346,8 +358,10 @@ def sort_polygon_vertices(points):
     angles = np.arctan2(pts[:, 1] - cy, pts[:, 0] - cx)
     return pts[np.argsort(angles)]
 
+# --- TAB 1: HIGH-CONTRAST 2D PLOT WITH FULL PATH ---
 with tab1:
-    fig, ax = plt.subplots(figsize=(10, 7.5))
+    fig, ax = plt.subplots(figsize=(11, 8), facecolor='#11111b')
+    ax.set_facecolor('#1e1e2e')
     
     all_pts = get_all_intersections(A, b_vec)
     bfs_points, bs_points = [], []
@@ -361,56 +375,63 @@ with tab1:
                 if not any(np.allclose(p, existing, atol=1e-4) for existing in bs_points):
                     bs_points.append(p)
                     
-    # Fill Feasible Region
+    # Fill Vibrant Feasible Region Polygon
     if len(bfs_points) >= 3:
         sorted_bfs = sort_polygon_vertices(bfs_points)
         ax.fill(sorted_bfs[:, 0], sorted_bfs[:, 1], color='#2ea043', alpha=0.35, label='Feasible Region')
         closed_poly = np.vstack([sorted_bfs, sorted_bfs[0]])
-        ax.plot(closed_poly[:, 0], closed_poly[:, 1], color='#3fb950', linewidth=3.5)
+        ax.plot(closed_poly[:, 0], closed_poly[:, 1], color='#3fb950', linewidth=3)
 
-    # Constraints
+    # Highlighted Constraint Boundary Lines
     x_grid = np.linspace(-0.5, 5.0, 400)
+    line_colors = ['#f5e0dc', '#cba6f7', '#f38ba8', '#fab387']
     for i in range(len(b_vec)):
         a1_val, a2_val = A[i]
+        color = line_colors[i % len(line_colors)]
         if abs(a2_val) > 1e-5:
             y_grid = (b_vec[i] - a1_val * x_grid) / a2_val
-            ax.plot(x_grid, y_grid, label=f'C{i+1}: {a1_val}x1 + {a2_val}x2 <= {b_vec[i]}', linestyle='--', linewidth=1.8)
+            ax.plot(x_grid, y_grid, label=f'C{i+1}: {a1_val}x1 + {a2_val}x2 <= {b_vec[i]}', color=color, linestyle='--', linewidth=2)
         else:
-            ax.axvline(x=b_vec[i]/a1_val, label=f'C{i+1}: {a1_val}x1 <= {b_vec[i]}', linestyle='--', linewidth=1.8)
+            ax.axvline(x=b_vec[i]/a1_val, label=f'C{i+1}: {a1_val}x1 <= {b_vec[i]}', color=color, linestyle='--', linewidth=2)
 
-    # Highlighted x1 and x2 axes
-    ax.axhline(0, color='#00d2ff', linewidth=2.5, zorder=3, label='Highlighted x1-axis (x2 = 0)')
-    ax.axvline(0, color='#7ee787', linewidth=2.5, zorder=3, label='Highlighted x2-axis (x1 = 0)')
+    # High-Contrast Highlighted Coordinate Axes
+    ax.axhline(0, color='#00f5ff', linewidth=3, zorder=3, label='x1-axis (x2 = 0)')
+    ax.axvline(0, color='#39ff14', linewidth=3, zorder=3, label='x2-axis (x1 = 0)')
 
-    # Markers
+    # Display Infeasible Basic Solutions & BFS Corner Points
     if bs_points:
         bs_arr = np.array(bs_points)
-        ax.scatter(bs_arr[:, 0], bs_arr[:, 1], color='#f85149', s=90, marker='X', zorder=4, label='Basic Solution (Infeasible)')
+        ax.scatter(bs_arr[:, 0], bs_arr[:, 1], color='#f85149', s=90, marker='X', zorder=4, label='Infeasible Basic Solution')
 
     if bfs_points:
         bfs_arr = np.array(bfs_points)
-        ax.scatter(bfs_arr[:, 0], bfs_arr[:, 1], color='#58a6ff', s=110, marker='o', zorder=5, label='Basic Feasible Solution (BFS)')
+        ax.scatter(bfs_arr[:, 0], bfs_arr[:, 1], color='#89b4fa', s=110, marker='o', zorder=5, label='Basic Feasible Solution (BFS)')
 
-    # Step Trajectory Vector
-    if not iter_data['is_optimal'] and iter_data['key_row'] != -1:
-        next_pt = iterations[step + 1]['pt'] if step + 1 < len(iterations) else curr_pt
-        if next_pt != curr_pt:
-            ax.annotate('', xy=(next_pt[0], next_pt[1]), xytext=(curr_pt[0], curr_pt[1]),
-                         arrowprops=dict(facecolor='#d29922', edgecolor='#d29922', shrink=0.05, width=2.5, headwidth=9))
+    # FULL TRAJECTORY PATH DISPLAY
+    full_path_pts = [it['pt'] for it in iterations[:step+1]]
+    for idx in range(len(full_path_pts) - 1):
+        p_start = full_path_pts[idx]
+        p_end = full_path_pts[idx+1]
+        ax.annotate('', xy=(p_end[0], p_end[1]), xytext=(p_start[0], p_start[1]),
+                     arrowprops=dict(facecolor='#f9e2af', edgecolor='#fab387', shrink=0.06, width=3, headwidth=10), zorder=7)
+        ax.text(p_start[0] + 0.05, p_start[1] + 0.05, f"Iter {idx}", color='#f9e2af', fontweight='bold', fontsize=10, zorder=8)
 
-    # Current Point Highlight
-    ax.scatter([curr_pt[0]], [curr_pt[1]], color='#f0883e', s=220, zorder=6, edgecolors='white', linewidth=2, label='Current Iteration Point')
+    # Highlight Current Iteration Point
+    ax.scatter([curr_pt[0]], [curr_pt[1]], color='#ff007f', s=230, zorder=9, edgecolors='white', linewidth=2.5, label='Current Point')
+    ax.text(curr_pt[0] + 0.05, curr_pt[1] + 0.05, f"Iter {step}", color='#ff007f', fontweight='bold', fontsize=11, zorder=10)
 
     ax.set_xlim(-0.5, 4.0)
     ax.set_ylim(-0.5, 4.0)
-    ax.set_title("Feasible Region & Corner Point Trajectory", fontweight='bold', fontsize=14, color='#58a6ff')
-    ax.set_xlabel("x1 (Decision Variable 1)", fontsize=12, color='#00d2ff')
-    ax.set_ylabel("x2 (Decision Variable 2)", fontsize=12, color='#7ee787')
-    ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=8.5, loc='upper right')
+    ax.set_title("Full Simplex Path & Corner Trajectory", fontweight='bold', fontsize=15, color='#89b4fa')
+    ax.set_xlabel("x1 (Decision Variable 1)", fontsize=12, color='#00f5ff', fontweight='bold')
+    ax.set_ylabel("x2 (Decision Variable 2)", fontsize=12, color='#39ff14', fontweight='bold')
+    ax.tick_params(colors='white')
+    ax.grid(True, alpha=0.25, color='#45475a')
+    ax.legend(fontsize=8.5, loc='upper right', facecolor='#181825', edgecolor='#45475a', labelcolor='white')
 
     st.pyplot(fig)
 
+# --- TAB 2: 3D OBJECTIVE SURFACE WITH BASE PLANE PROJECTION ---
 with tab2:
     x1_a = np.linspace(0, 4, 30)
     x2_a = np.linspace(0, 4, 30)
@@ -418,18 +439,68 @@ with tab2:
     Z = c1 * X1 + c2 * X2
     
     fig3d = go.Figure()
-    fig3d.add_trace(go.Surface(z=Z, x=X1, y=X2, colorscale='Viridis', opacity=0.6, showscale=False))
     
+    # 1. 3D Surface for Objective Function
+    fig3d.add_trace(go.Surface(z=Z, x=X1, y=X2, colorscale='Viridis', opacity=0.55, showscale=False, name="Objective Surface"))
+    
+    # 2. Feasible Region Projection on x1-x2 Base Plane (z=0)
+    if len(bfs_points) >= 3:
+        sorted_bfs = sort_polygon_vertices(bfs_points)
+        bx = list(sorted_bfs[:, 0]) + [sorted_bfs[0, 0]]
+        by = list(sorted_bfs[:, 1]) + [sorted_bfs[0, 1]]
+        bz = [0.0] * len(bx)
+        
+        fig3d.add_trace(go.Scatter3d(
+            x=bx, y=by, z=bz,
+            mode='lines',
+            line=dict(color='#3fb950', width=6),
+            name="Base Plane Feasible Region"
+        ))
+        
+        fig3d.add_trace(go.Mesh3d(
+            x=sorted_bfs[:, 0], y=sorted_bfs[:, 1], z=np.zeros(len(sorted_bfs)),
+            color='#2ea043', opacity=0.4, name="Base Feasible Area"
+        ))
+
+    # 3. Trajectory Path on 3D Objective Surface
     path_pts = [it['pt'] for it in iterations[:step+1]]
     px = [p[0] for p in path_pts]
     py = [p[1] for p in path_pts]
     pz = [c1*x + c2*y for x, y in zip(px, py)]
     
-    fig3d.add_trace(go.Scatter3d(x=px, y=py, z=pz, mode='lines+markers+text',
-                                marker=dict(size=8, color='#f38ba8'),
-                                line=dict(color='#f38ba8', width=5),
-                                text=[f"Iter {i}" for i in range(len(px))]))
+    fig3d.add_trace(go.Scatter3d(
+        x=px, y=py, z=pz,
+        mode='lines+markers+text',
+        marker=dict(size=8, color='#ff007f'),
+        line=dict(color='#ff007f', width=6),
+        text=[f"Iter {i}" for i in range(len(px))],
+        textposition="top center",
+        name="Objective Path"
+    ))
     
-    fig3d.update_layout(scene=dict(xaxis_title='x1', yaxis_title='x2', zaxis_title='Z Elevation'),
-                        margin=dict(l=0, r=0, b=0, t=30), height=550, template="plotly_dark")
+    # 4. Perpendicular Drop Line from Objective Surface to Base Plane
+    opt_x1, opt_x2 = curr_pt[0], curr_pt[1]
+    opt_z = c1 * opt_x1 + c2 * opt_x2
+    
+    fig3d.add_trace(go.Scatter3d(
+        x=[opt_x1, opt_x1],
+        y=[opt_x2, opt_x2],
+        z=[0, opt_z],
+        mode='lines+markers',
+        line=dict(color='#f9e2af', width=7, dash='dash'),
+        marker=dict(size=7, color=['#39ff14', '#ff007f']),
+        name="Z Drop-Line to Base"
+    ))
+    
+    fig3d.update_layout(
+        scene=dict(
+            xaxis_title='x1 (Base Plane)',
+            yaxis_title='x2 (Base Plane)',
+            zaxis_title='Z (Objective Altitude)',
+            camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))
+        ),
+        margin=dict(l=0, r=0, b=0, t=30),
+        height=580,
+        template="plotly_dark"
+    )
     st.plotly_chart(fig3d, use_container_width=True)
