@@ -518,11 +518,10 @@ def sort_polygon_vertices(points):
     angles = np.arctan2(pts[:, 1] - cy, pts[:, 0] - cx)
     return pts[np.argsort(angles)]
 
-# --- TAB 1: HIGH-CONTRAST 2D PLOT WITH FULL PATH ---
+# --- TAB 1: INTERACTIVE 2D PLOT WITH HOVER TOOLTIPS ---
 with tab1:
-    fig, ax = plt.subplots(figsize=(11, 8), facecolor='#11111b')
-    ax.set_facecolor('#1e1e2e')
-    
+    fig2d = go.Figure()
+
     all_pts = get_all_intersections(A, b_vec)
     bfs_points, bs_points = [], []
     
@@ -534,62 +533,115 @@ with tab1:
             else:
                 if not any(np.allclose(p, existing, atol=1e-4) for existing in bs_points):
                     bs_points.append(p)
-                    
-    # Fill Vibrant Feasible Region Polygon
+
+    # 1. Feasible Region Polygon Area
     if len(bfs_points) >= 3:
         sorted_bfs = sort_polygon_vertices(bfs_points)
-        ax.fill(sorted_bfs[:, 0], sorted_bfs[:, 1], color='#2ea043', alpha=0.35, label='Feasible Region')
-        closed_poly = np.vstack([sorted_bfs, sorted_bfs[0]])
-        ax.plot(closed_poly[:, 0], closed_poly[:, 1], color='#3fb950', linewidth=3)
+        poly_x = list(sorted_bfs[:, 0]) + [sorted_bfs[0, 0]]
+        poly_y = list(sorted_bfs[:, 1]) + [sorted_bfs[0, 1]]
+        
+        fig2d.add_trace(go.Scatter(
+            x=poly_x, y=poly_y,
+            fill="toself",
+            fillcolor="rgba(46, 160, 67, 0.35)",
+            line=dict(color="#3fb950", width=3),
+            name="Feasible Region",
+            hoverinfo="skip"
+        ))
 
-    # Highlighted Constraint Boundary Lines
-    x_grid = np.linspace(-0.5, 5.0, 400)
+    # 2. Constraint Boundary Lines
+    x_line = np.linspace(-0.5, 5.0, 200)
     line_colors = ['#f5e0dc', '#cba6f7', '#f38ba8', '#fab387']
     for i in range(len(b_vec)):
         a1_val, a2_val = A[i]
         color = line_colors[i % len(line_colors)]
         if abs(a2_val) > 1e-5:
-            y_grid = (b_vec[i] - a1_val * x_grid) / a2_val
-            ax.plot(x_grid, y_grid, label=f'C{i+1}: {a1_val}x1 + {a2_val}x2 <= {b_vec[i]}', color=color, linestyle='--', linewidth=2)
+            y_line = (b_vec[i] - a1_val * x_line) / a2_val
+            fig2d.add_trace(go.Scatter(
+                x=x_line, y=y_line, mode='lines',
+                line=dict(color=color, width=2, dash='dash'),
+                name=f'C{i+1}: {a1_val}x1 + {a2_val}x2 <= {b_vec[i]}',
+                hoverinfo="skip"
+            ))
         else:
-            ax.axvline(x=b_vec[i]/a1_val, label=f'C{i+1}: {a1_val}x1 <= {b_vec[i]}', color=color, linestyle='--', linewidth=2)
+            fig2d.add_trace(go.Scatter(
+                x=[b_vec[i]/a1_val]*2, y=[-0.5, 5.0], mode='lines',
+                line=dict(color=color, width=2, dash='dash'),
+                name=f'C{i+1}: {a1_val}x1 <= {b_vec[i]}',
+                hoverinfo="skip"
+            ))
 
-    # High-Contrast Highlighted Coordinate Axes
-    ax.axhline(0, color='#00f5ff', linewidth=3, zorder=3, label='x1-axis (x2 = 0)')
-    ax.axvline(0, color='#39ff14', linewidth=3, zorder=3, label='x2-axis (x1 = 0)')
-
-    # Display Infeasible Basic Solutions & BFS Corner Points
+    # 3. Infeasible Basic Solution Intersection Points (Hover Enabled)
     if bs_points:
-        bs_arr = np.array(bs_points)
-        ax.scatter(bs_arr[:, 0], bs_arr[:, 1], color='#f85149', s=90, marker='X', zorder=4, label='Infeasible Basic Solution')
+        bs_x = [p[0] for p in bs_points]
+        bs_y = [p[1] for p in bs_points]
+        bs_z = [c1 * p[0] + c2 * p[1] for p in bs_points]
+        bs_hover = [f"<b>Infeasible Basic Solution</b><br>x1: {p[0]:.2f}<br>x2: {p[1]:.2f}<br>Z: {z:.2f}" for p, z in zip(bs_points, bs_z)]
+        
+        fig2d.add_trace(go.Scatter(
+            x=bs_x, y=bs_y, mode='markers',
+            marker=dict(size=12, color='#f85149', symbol='x'),
+            name='Infeasible Corner Point',
+            hovertext=bs_hover,
+            hoverinfo='text'
+        ))
 
+    # 4. Feasible Basic Corner Points (BFS) (Hover Enabled)
     if bfs_points:
-        bfs_arr = np.array(bfs_points)
-        ax.scatter(bfs_arr[:, 0], bfs_arr[:, 1], color='#89b4fa', s=110, marker='o', zorder=5, label='Basic Feasible Solution (BFS)')
+        bfs_x = [p[0] for p in bfs_points]
+        bfs_y = [p[1] for p in bfs_points]
+        bfs_z = [c1 * p[0] + c2 * p[1] for p in bfs_points]
+        bfs_hover = [f"<b>Basic Feasible Solution (BFS)</b><br>x1: {p[0]:.2f}<br>x2: {p[1]:.2f}<br>Z: {z:.2f}" for p, z in zip(bfs_points, bfs_z)]
+        
+        fig2d.add_trace(go.Scatter(
+            x=bfs_x, y=bfs_y, mode='markers',
+            marker=dict(size=14, color='#89b4fa', symbol='circle'),
+            name='BFS Corner Point',
+            hovertext=bfs_hover,
+            hoverinfo='text'
+        ))
 
-    # FULL TRAJECTORY PATH DISPLAY
+    # 5. Full Trajectory Path Trace
     full_path_pts = [it['pt'] for it in iterations[:step+1]]
-    for idx in range(len(full_path_pts) - 1):
-        p_start = full_path_pts[idx]
-        p_end = full_path_pts[idx+1]
-        ax.annotate('', xy=(p_end[0], p_end[1]), xytext=(p_start[0], p_start[1]),
-                     arrowprops=dict(facecolor='#f9e2af', edgecolor='#fab387', shrink=0.06, width=3, headwidth=10), zorder=7)
-        ax.text(p_start[0] + 0.05, p_start[1] + 0.05, f"Iter {idx}", color='#f9e2af', fontweight='bold', fontsize=10, zorder=8)
+    px = [p[0] for p in full_path_pts]
+    py = [p[1] for p in full_path_pts]
+    pz = [c1 * p[0] + c2 * p[1] for p in full_path_pts]
+    path_hover = [f"<b>Iteration {i} Path Point</b><br>x1: {p[0]:.2f}<br>x2: {p[1]:.2f}<br>Z: {z:.2f}" for i, (p, z) in enumerate(zip(full_path_pts, pz))]
 
-    # Highlight Current Iteration Point
-    ax.scatter([curr_pt[0]], [curr_pt[1]], color='#ff007f', s=230, zorder=9, edgecolors='white', linewidth=2.5, label='Current Point')
-    ax.text(curr_pt[0] + 0.05, curr_pt[1] + 0.05, f"Iter {step}", color='#ff007f', fontweight='bold', fontsize=11, zorder=10)
+    fig2d.add_trace(go.Scatter(
+        x=px, y=py, mode='lines+markers+text',
+        line=dict(color='#fab387', width=3),
+        marker=dict(size=10, color='#f9e2af'),
+        text=[f"Iter {i}" for i in range(len(px))],
+        textposition="top right",
+        name='Simplex Trajectory',
+        hovertext=path_hover,
+        hoverinfo='text'
+    ))
 
-    ax.set_xlim(-0.5, 4.0)
-    ax.set_ylim(-0.5, 4.0)
-    ax.set_title("Full Simplex Path & Corner Trajectory", fontweight='bold', fontsize=15, color='#89b4fa')
-    ax.set_xlabel("x1 (Decision Variable 1)", fontsize=12, color='#00f5ff', fontweight='bold')
-    ax.set_ylabel("x2 (Decision Variable 2)", fontsize=12, color='#39ff14', fontweight='bold')
-    ax.tick_params(colors='white')
-    ax.grid(True, alpha=0.25, color='#45475a')
-    ax.legend(fontsize=8.5, loc='upper right', facecolor='#181825', edgecolor='#45475a', labelcolor='white')
+    # 6. Highlight Current Active Iteration Point
+    curr_z = c1 * curr_pt[0] + c2 * curr_pt[1]
+    curr_hover = f"<b>CURRENT POINT (Iter {step})</b><br>x1: {curr_pt[0]:.2f}<br>x2: {curr_pt[1]:.2f}<br>Z: {curr_z:.2f}"
+    
+    fig2d.add_trace(go.Scatter(
+        x=[curr_pt[0]], y=[curr_pt[1]], mode='markers',
+        marker=dict(size=18, color='#ff007f', line=dict(color='white', width=2)),
+        name=f'Current Point (Iter {step})',
+        hovertext=[curr_hover],
+        hoverinfo='text'
+    ))
 
-    st.pyplot(fig)
+    # Layout Formatting
+    fig2d.update_layout(
+        title="Interactive 2D Feasible Region & Corner Trajectory",
+        xaxis=dict(title="x1 (Decision Variable 1)", range=[-0.5, 4.0], zeroline=True, zerolinecolor='#00f5ff', zerolinewidth=2),
+        yaxis=dict(title="x2 (Decision Variable 2)", range=[-0.5, 4.0], zeroline=True, zerolinecolor='#39ff14', zerolinewidth=2),
+        height=600,
+        template="plotly_dark",
+        hoverlabel=dict(bgcolor="#181825", font_size=13, font_family="Arial")
+    )
+
+    st.plotly_chart(fig2d, use_container_width=True)
 
 # --- TAB 2: 3D OBJECTIVE SURFACE WITH BASE PLANE PROJECTION ---
 with tab2:
