@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
 # Set page configuration
-st.set_page_config(page_title="Simplex Method Practice & Visualizer", layout="wide")
+st.set_page_config(page_title="Simplex Practice & Visualizer", layout="wide")
 
-# Custom CSS for UI styling, blinking error effects, and table layouts
+# Custom CSS for UI styling, blinking error effects, and textbook table layout
 st.markdown("""
 <style>
     .main-title { font-size: 26px; font-weight: bold; color: #89b4fa; }
@@ -23,19 +23,28 @@ st.markdown("""
         padding: 5px;
         color: #ff7b72;
         font-weight: bold;
+        margin-bottom: 5px;
     }
-    .pivot-highlight {
-        background-color: #238636;
-        color: white;
-        padding: 8px;
-        border-radius: 6px;
+    
+    /* Textbook Table Layout Styling */
+    .table-header-group {
+        text-align: center;
         font-weight: bold;
+        font-size: 16px;
+        border-bottom: 2px solid #89b4fa;
+        margin-bottom: 10px;
+        padding-bottom: 5px;
+    }
+    .dotted-divider {
+        border-top: 2px dashed #89b4fa;
+        margin-top: 8px;
+        margin-bottom: 12px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='main-title'>Interactive Simplex Tableau & Step Visualizer</div>", unsafe_allow_html=True)
-st.caption("Practice Row-Reduction Calculations | Automated Error Validation | Interactive 2D/3D Geometry")
+st.markdown("<div class='main-title'>Simplex Method Practice & Step Visualizer</div>", unsafe_allow_html=True)
+st.caption("Textbook-Style Table | Practice Row Operations | Automated Verification & Blinking Errors")
 
 # --- SIDEBAR: PROBLEM INPUTS ---
 st.sidebar.header("1. Problem Formulation")
@@ -75,7 +84,6 @@ A = np.array(A_inputs)
 b_vec = np.array(b_inputs)
 n_s = len(b_vec)
 headers = ['x1', 'x2'] + [f's{i+1}' for i in range(n_s)]
-cj_coeffs = [c1, c2] + [0.0] * n_s
 
 # --- SIMPLEX ALGORITHM ENGINE ---
 def compute_all_simplex_iterations(c1, c2, A, b_vec):
@@ -88,7 +96,7 @@ def compute_all_simplex_iterations(c1, c2, A, b_vec):
     table[:-1, -1] = b_vec
     table[-1, :-1] = c_obj
     
-    basis = [2 + i for i in range(n_s)] # Initial slack basis indices
+    basis = [2 + i for i in range(n_s)] # Slack indices
     iterations = []
     
     for _ in range(10):
@@ -99,7 +107,7 @@ def compute_all_simplex_iterations(c1, c2, A, b_vec):
             if b_var < 2:
                 curr_pt[b_var] = table[idx, -1]
                 
-        # Check Optimality: All z_row coefficients >= 0 (for standard max form z - c_j)
+        # Check Optimality: All z_row coefficients >= 0
         if np.all(z_row >= -1e-5):
             iterations.append({
                 'table': table.copy(), 'basis': list(basis), 'z_row': z_row.copy(),
@@ -149,45 +157,53 @@ if 'step_verified' not in st.session_state:
 step = st.session_state.current_step
 iter_data = iterations[min(step, len(iterations)-1)]
 
-# --- DISPLAY STANDARD FORM FORMULATION ---
-st.markdown("### Standard Form Notation")
-sf_html = f"<b>Maximize Z = {c1}x<sub>1</sub> + {c2}x<sub>2</sub>" + "".join([f" + 0s<sub>{i+1}</sub>" for i in range(n_s)]) + "</b><br>"
-sf_html += "Subject to:<br>"
-for i in range(n_s):
-    slacks = "".join([f" + 1s<sub>{j+1}</sub>" if i==j else f" + 0s<sub>{j+1}</sub>" for j in range(n_s)])
-    sf_html += f"&nbsp;&nbsp;{A[i][0]}x<sub>1</sub> + {A[i][1]}x<sub>2</sub>{slacks} = {b_vec[i]}<br>"
-sf_html += f"&nbsp;&nbsp;x<sub>1</sub>, x<sub>2</sub>, s<sub>1</sub>..s<sub>{n_s}</sub> &ge; 0"
-st.markdown(f"<div class='card'>{sf_html}</div>", unsafe_allow_html=True)
-
 # --- SIMPLEX TABLE PRACTICE SECTION ---
-st.markdown(f"### Iteration {step} — Simplex Calculation Practice Table")
-st.write("Fill up the **core body values**, **solution vector (b)**, and **Z-row (Cj - Zj / Row Z)** for this iteration:")
+st.markdown(f"### Table (Iteration {step+1})")
 
-# Table Headers Display
-header_cols = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.5, 1.5])
-header_cols[0].markdown("**CB**")
-header_cols[1].markdown("**Basis**")
+# Header grouping spans "Coefficients of" over variable columns
+cols_top = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.8, 1.5])
+cols_top[2].markdown(f"<div class='table-header-group'>Coefficients of</div>", unsafe_allow_html=True)
+
+# Main Header Row
+header_cols = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.8, 1.5])
+header_cols[0].markdown("**Iteration Number**")
+header_cols[1].markdown("**Basic Variables**")
 for idx, h in enumerate(headers):
-    header_cols[2 + idx].markdown(f"**{h}** (Cj={cj_coeffs[idx]})")
-header_cols[-2].markdown("**b (X_B)**")
+    header_cols[2 + idx].markdown(f"**{h}**")
+header_cols[-2].markdown("**R.H.S. Solution**")
 header_cols[-1].markdown("**Ratio**")
 
-# Prepare student input containers
-user_table_inputs = []
-user_z_inputs = []
+# Row 1: Objective function Z row
+z_cols = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.8, 1.5])
+z_cols[0].markdown(f"**{step+1}**")
+z_cols[1].markdown("**z**")
 
+user_z_inputs = []
+for j in range(len(headers)):
+    z_inp = z_cols[2 + j].number_input(f"Z_C{j+1}", value=0.0, step=0.1, key=f"z_{step}_{j}", label_visibility="collapsed")
+    user_z_inputs.append(z_inp)
+
+z_val_inp = z_cols[-2].number_input(f"Z_b", value=0.0, step=0.1, key=f"z_b_{step}", label_visibility="collapsed")
+user_z_inputs.append(z_val_inp)
+
+# Ratio for Z row is not applicable
+z_cols[-1].markdown("—")
+
+# Dashed line separating Z row from constraints (matching the textbook image)
+st.markdown("<div class='dotted-divider'></div>", unsafe_allow_html=True)
+
+# Rows 2+: Basic Variables
+user_table_inputs = []
 expected_table = iter_data['table']
 basis_indices = iter_data['basis']
 
-# Render rows for basic variables
 for i in range(n_s):
     b_var_idx = basis_indices[i]
     b_var_name = headers[b_var_idx]
-    b_var_cb = cj_coeffs[b_var_idx]
     
-    cols = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.5, 1.5])
-    cols[0].write(f"`{b_var_cb}`")
-    cols[1].write(f"**{b_var_name}**")
+    cols = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.8, 1.5])
+    cols[0].write("") # Blank iteration number for basic variable rows
+    cols[1].markdown(f"**{b_var_name}**")
     
     row_inputs = []
     for j in range(len(headers)):
@@ -196,65 +212,59 @@ for i in range(n_s):
         
     b_val_inp = cols[-2].number_input(f"R{i+1}_b", value=0.0, step=0.1, key=f"b_{step}_{i}", label_visibility="collapsed")
     
-    # Calculate ratio if key column is known
-    ratio_disp = "-"
-    if iter_data['key_col'] != -1 and iter_data['key_col'] < len(headers):
-        cv = expected_table[i, iter_data['key_col']]
-        rv = expected_table[i, -1]
-        ratio_disp = f"{rv/cv:.2f}" if cv > 1e-5 else "∞"
-    cols[-1].write(f"`{ratio_disp}`")
-    
+    # Ratio column: Remains blank until student completes filling and verifies table
+    if st.session_state.step_verified and not iter_data['is_optimal']:
+        if iter_data['key_col'] != -1 and iter_data['key_col'] < len(headers):
+            cv = expected_table[i, iter_data['key_col']]
+            rv = expected_table[i, -1]
+            ratio_disp = f"{rv/cv:.2f}" if cv > 1e-5 else "∞"
+            cols[-1].markdown(f"**{ratio_disp}**")
+        else:
+            cols[-1].markdown("—")
+    else:
+        cols[-1].markdown("—")
+        
     user_table_inputs.append(row_inputs + [b_val_inp])
 
-# Render bottom Z-row input
-z_cols = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.5, 1.5])
-z_cols[0].write("—")
-z_cols[1].write("**Z-row**")
-for j in range(len(headers)):
-    z_inp = z_cols[2 + j].number_input(f"Z_C{j+1}", value=0.0, step=0.1, key=f"z_{step}_{j}", label_visibility="collapsed")
-    user_z_inputs.append(z_inp)
-z_val_inp = z_cols[-2].number_input(f"Z_b", value=0.0, step=0.1, key=f"z_b_{step}", label_visibility="collapsed")
-z_cols[-1].write("—")
-
-user_z_inputs.append(z_val_inp)
-
-# --- VERIFICATION & ERROR HANDLING BUTTON ---
-btn_verify = st.button("Finished Filling Table — Verify Calculations", type="primary")
+# --- VERIFICATION BUTTON & ERROR HANDLING ---
+st.markdown("<br>", unsafe_allow_html=True)
+btn_verify = st.button("I am finished with filling up the table", type="primary")
 
 if btn_verify:
     st.session_state.step_verified = False
     has_error = False
     error_log = []
     
-    # Validate Core Row entries against Gauss-Jordan results
+    # Verify Z-row values
+    for j in range(len(headers) + 1):
+        user_zv = user_z_inputs[j]
+        exp_zv = expected_table[-1, j]
+        if not np.isclose(user_zv, exp_zv, atol=1e-1):
+            has_error = True
+            col_label = headers[j] if j < len(headers) else "R.H.S. Solution"
+            error_log.append((-1, j, f"Z-row, Column '{col_label}': Expected `{exp_zv:.2f}`, got `{user_zv:.2f}`"))
+
+    # Verify Core basic variable rows
     for i in range(n_s):
         for j in range(len(headers) + 1):
             user_v = user_table_inputs[i][j]
             exp_v = expected_table[i, j]
             if not np.isclose(user_v, exp_v, atol=1e-1):
                 has_error = True
-                col_label = headers[j] if j < len(headers) else "b (RHS)"
-                error_log.append((i, j, f"Row {i+1} ({headers[basis_indices[i]]}), Column '{col_label}': Expected `{exp_v:.2f}`, got `{user_v:.2f}`"))
-                
-    # Validate Z-row entries
-    for j in range(len(headers) + 1):
-        user_zv = user_z_inputs[j]
-        exp_zv = expected_table[-1, j]
-        if not np.isclose(user_zv, exp_zv, atol=1e-1):
-            has_error = True
-            col_label = headers[j] if j < len(headers) else "Z-Value"
-            error_log.append((-1, j, f"Z-row, Column '{col_label}': Expected `{exp_zv:.2f}`, got `{user_zv:.2f}`"))
+                col_label = headers[j] if j < len(headers) else "R.H.S. Solution"
+                error_log.append((i, j, f"Row ({headers[basis_indices[i]]}), Column '{col_label}': Expected `{exp_v:.2f}`, got `{user_v:.2f}`"))
 
     if has_error:
-        st.error("⚠️ Calculation Errors Detected in Tableau! Please correct the highlighted entries below:")
+        st.error("⚠️ Calculation mistakes detected! Check the entries highlighted below:")
         for err in error_log:
             st.markdown(f"<div class='blink-error'>❌ {err[2]}</div>", unsafe_allow_html=True)
     else:
-        st.success("✅ Excellent! All row reduction and tableau values are completely correct.")
+        st.success("✅ Table correctly filled! Ratios and pivot conditions are now calculated below.")
         st.session_state.step_verified = True
+        st.rerun()
 
-# --- POST-VERIFICATION OPTIMALITY & PIVOT EVALUATION ---
-if st.session_state.step_verified or iter_data['is_optimal']:
+# --- OPTIMALITY CONDITION & PIVOT DISPLAY ---
+if st.session_state.step_verified:
     st.markdown("---")
     
     if iter_data['is_optimal']:
@@ -265,9 +275,9 @@ if st.session_state.step_verified or iter_data['is_optimal']:
         <div style='background-color: #1b4721; padding: 20px; border-radius: 10px; border: 2px solid #2ea043;'>
             <h3 style='color: #3fb950; margin:0;'>🎉 Optimality Condition Satisfied!</h3>
             <p style='font-size: 16px; color: #e6edf3; margin-top: 10px;'>
-                All entries in the Z-row are non-negative (&ge; 0). No further improvement is possible.<br>
-                <b>Optimal Decision Variables:</b> x<sub>1</sub> = {pt[0]:.2f}, x<sub>2</sub> = {pt[1]:.2f}<br>
-                <b>Maximum Objective Z Value:</b> {max_z:.2f}
+                Since all coefficients in the objective equation (Z-row) are non-negative (&ge; 0), the optimal solution is obtained.<br>
+                <b>Optimal Values:</b> x<sub>1</sub> = {pt[0]:.2f}, x<sub>2</sub> = {pt[1]:.2f}<br>
+                <b>Maximum Objective Value Z:</b> {max_z:.2f}
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -278,36 +288,35 @@ if st.session_state.step_verified or iter_data['is_optimal']:
         leaving_var = headers[iter_data['basis'][k_row]]
         pivot_val = iter_data['table'][k_row, k_col]
         
-        st.markdown("### Optimality & Feasibility Condition Analysis")
-        st.warning("Optimality Condition Negative: Negative entries present in Z-row. Proceed to pivoting.")
+        st.markdown("### Optimality & Feasibility Condition Results")
+        st.warning("Negative coefficients present in Z-row. Optimality condition NOT satisfied.")
         
         col_p1, col_p2, col_p3, col_p4 = st.columns(4)
-        col_p1.metric("Key Column (Entering Var)", entering_var, help="Most negative value in Z-row")
-        col_p2.metric("Key Row (Leaving Var)", leaving_var, help="Minimum non-negative replacement ratio")
-        col_p3.metric("Key Pivot Element", f"{pivot_val:.2f}", help="Intersection of Key Row and Key Column")
-        col_p4.metric("Next Iteration Basis Replacement", f"{leaving_var} ➔ {entering_var}")
+        col_p1.metric("Key Column (Entering Var)", entering_var, help="Most negative coefficient in Z-row")
+        col_p2.metric("Key Row (Leaving Var)", leaving_var, help="Minimum positive replacement ratio")
+        col_p3.metric("Key Element (Pivot)", f"{pivot_val:.2f}", help="Intersection element of Key Column and Key Row")
+        col_p4.metric("Basis Variable Replacement", f"{leaving_var} ➔ {entering_var}")
         
         if step < len(iterations) - 1:
-            if st.button("Advance to Next Iteration Table", type="secondary"):
+            if st.button("Form New Table for Next Iteration ➔", type="secondary"):
                 st.session_state.current_step += 1
                 st.session_state.step_verified = False
                 st.rerun()
 
-# --- GRAPHICAL VISUALIZATIONS (WITH AXES HIGHLIGHTING) ---
+# --- GRAPHICAL VISUALIZATION (2D & 3D) ---
 st.markdown("---")
-st.markdown("### Geometric Feasible Region & Corner Trajectory")
+st.markdown("### Geometry & Coordinate Axes View")
 
 tab1, tab2 = st.tabs(["2D Corner Trajectory & Highlighted Axes", "3D Objective Surface"])
 
 curr_pt = iter_data['pt']
 
-# Geometry helpers
 def get_all_intersections(A, b_vec):
     lines = []
     for i in range(len(b_vec)):
         lines.append((A[i][0], A[i][1], b_vec[i]))
-    lines.append((1.0, 0.0, 0.0)) # x1 = 0 axis line
-    lines.append((0.0, 1.0, 0.0)) # x2 = 0 axis line
+    lines.append((1.0, 0.0, 0.0))
+    lines.append((0.0, 1.0, 0.0))
     
     points = []
     n_lines = len(lines)
@@ -338,7 +347,7 @@ def sort_polygon_vertices(points):
     return pts[np.argsort(angles)]
 
 with tab1:
-    fig, ax = plt.subplots(figsize=(11, 8.5))
+    fig, ax = plt.subplots(figsize=(10, 7.5))
     
     all_pts = get_all_intersections(A, b_vec)
     bfs_points, bs_points = [], []
@@ -359,7 +368,7 @@ with tab1:
         closed_poly = np.vstack([sorted_bfs, sorted_bfs[0]])
         ax.plot(closed_poly[:, 0], closed_poly[:, 1], color='#3fb950', linewidth=3.5)
 
-    # Constraint Boundary Lines
+    # Constraints
     x_grid = np.linspace(-0.5, 5.0, 400)
     for i in range(len(b_vec)):
         a1_val, a2_val = A[i]
@@ -369,11 +378,11 @@ with tab1:
         else:
             ax.axvline(x=b_vec[i]/a1_val, label=f'C{i+1}: {a1_val}x1 <= {b_vec[i]}', linestyle='--', linewidth=1.8)
 
-    # --- HIGHLIGHTED X1 & X2 COORDINATE AXES ---
+    # Highlighted x1 and x2 axes
     ax.axhline(0, color='#00d2ff', linewidth=2.5, zorder=3, label='Highlighted x1-axis (x2 = 0)')
     ax.axvline(0, color='#7ee787', linewidth=2.5, zorder=3, label='Highlighted x2-axis (x1 = 0)')
 
-    # Basic Solutions vs Basic Feasible Solutions
+    # Markers
     if bs_points:
         bs_arr = np.array(bs_points)
         ax.scatter(bs_arr[:, 0], bs_arr[:, 1], color='#f85149', s=90, marker='X', zorder=4, label='Basic Solution (Infeasible)')
@@ -382,19 +391,19 @@ with tab1:
         bfs_arr = np.array(bfs_points)
         ax.scatter(bfs_arr[:, 0], bfs_arr[:, 1], color='#58a6ff', s=110, marker='o', zorder=5, label='Basic Feasible Solution (BFS)')
 
-    # Path Vector Arrow
+    # Step Trajectory Vector
     if not iter_data['is_optimal'] and iter_data['key_row'] != -1:
         next_pt = iterations[step + 1]['pt'] if step + 1 < len(iterations) else curr_pt
         if next_pt != curr_pt:
             ax.annotate('', xy=(next_pt[0], next_pt[1]), xytext=(curr_pt[0], curr_pt[1]),
                          arrowprops=dict(facecolor='#d29922', edgecolor='#d29922', shrink=0.05, width=2.5, headwidth=9))
 
-    # Current Point Indicator
-    ax.scatter([curr_pt[0]], [curr_pt[1]], color='#f0883e', s=220, zorder=6, edgecolors='white', linewidth=2, label='Current Iteration Corner')
+    # Current Point Highlight
+    ax.scatter([curr_pt[0]], [curr_pt[1]], color='#f0883e', s=220, zorder=6, edgecolors='white', linewidth=2, label='Current Iteration Point')
 
     ax.set_xlim(-0.5, 4.0)
     ax.set_ylim(-0.5, 4.0)
-    ax.set_title("Corner Point Trajectory & Coordinate Axes", fontweight='bold', fontsize=14, color='#58a6ff')
+    ax.set_title("Feasible Region & Corner Point Trajectory", fontweight='bold', fontsize=14, color='#58a6ff')
     ax.set_xlabel("x1 (Decision Variable 1)", fontsize=12, color='#00d2ff')
     ax.set_ylabel("x2 (Decision Variable 2)", fontsize=12, color='#7ee787')
     ax.grid(True, alpha=0.3)
