@@ -34,15 +34,6 @@ st.markdown("""
         background-color: #181825;
         margin-bottom: 20px;
     }
-    .table-group-header {
-        text-align: center;
-        font-weight: bold;
-        font-size: 15px;
-        color: #89b4fa;
-        border-bottom: 2px solid #89b4fa;
-        padding-bottom: 4px;
-        margin-bottom: 8px;
-    }
     .dotted-divider {
         border-top: 2px dashed #89b4fa;
         margin-top: 8px;
@@ -52,7 +43,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("<div class='main-title'>Simplex Method Practice & Interactive Visualizer</div>", unsafe_allow_html=True)
-st.caption("Bordered Tableau Layout | Zeroth Iteration Indexing | Interactive 2D & 3D Geometry")
+st.caption("Bordered Tableau Layout | 0 th Iteration Indexing | Interactive 2D & 3D Geometry")
 
 # --- SIDEBAR: PROBLEM INPUTS ---
 st.sidebar.header("1. Problem Formulation")
@@ -166,18 +157,14 @@ step = st.session_state.current_step
 iter_data = iterations[min(step, len(iterations)-1)]
 
 # Text Label for Iteration Number
-iter_title = "Zeroth Iteration" if step == 0 else f"Iteration {step}"
+iter_title = "0 th Iteration" if step == 0 else f"{step} st Iteration" if step == 1 else f"{step} nd Iteration" if step == 2 else f"{step} th Iteration"
 
 # --- SIMPLEX TABLE PRACTICE SECTION ---
 st.markdown(f"### Simplex Table ({iter_title})")
 
 st.markdown("<div class='tableau-box'>", unsafe_allow_html=True)
 
-# 1. Single-Line Grouped Header for Variables
-cols_top = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.8, 1.5])
-cols_top[2].markdown(f"<div class='table-group-header'>Coefficients of {' , '.join(headers)}</div>", unsafe_allow_html=True)
-
-# 2. Main Column Headers
+# Main Column Headers
 header_cols = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.8, 1.5])
 header_cols[0].markdown("**Iteration Number**")
 header_cols[1].markdown("**Basic Variables**")
@@ -186,7 +173,7 @@ for idx, h in enumerate(headers):
 header_cols[-2].markdown("**R.H.S. Solution**")
 header_cols[-1].markdown("**Ratio**")
 
-# 3. Z Row
+# Z Row
 z_cols = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.8, 1.5])
 z_cols[0].markdown(f"**{step}**")
 z_cols[1].markdown("**z**")
@@ -202,7 +189,7 @@ z_cols[-1].markdown("—")
 
 st.markdown("<div class='dotted-divider'></div>", unsafe_allow_html=True)
 
-# 4. Basic Variables Rows
+# Basic Variables Rows
 user_table_inputs = []
 expected_table = iter_data['table']
 basis_indices = iter_data['basis']
@@ -309,8 +296,9 @@ if st.session_state.step_verified:
         col_p4.metric("Basis Variable Replacement", f"{leaving_var} ➔ {entering_var}")
         
         if step < len(iterations) - 1:
-            next_iter_label = f"Iteration {step + 1}"
-            if st.button(f"Form New Table for {next_iter_label} ➔", type="secondary"):
+            next_step_num = step + 1
+            next_label = f"{next_step_num} st Iteration" if next_step_num == 1 else f"{next_step_num} nd Iteration" if next_step_num == 2 else f"{next_step_num} th Iteration"
+            if st.button(f"Form New Table for {next_label} ➔", type="secondary"):
                 st.session_state.current_step += 1
                 st.session_state.step_verified = False
                 st.rerun()
