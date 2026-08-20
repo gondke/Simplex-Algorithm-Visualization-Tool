@@ -2,6 +2,13 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+import io
+
+# Imports for PDF generation
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
 
 # Set page configuration
 st.set_page_config(page_title="Simplex Practice & Visualizer", layout="wide")
@@ -43,36 +50,71 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("<div class='main-title'>Simplex Method Practice & Interactive Visualizer</div>", unsafe_allow_html=True)
-st.caption("Bordered Tableau Layout | 0 th Iteration Indexing | Interactive 2D & 3D Geometry")
+st.caption("Bordered Tableau Layout | 0 th Iteration Indexing | PDF Export & Lock Controls")
 
-# --- SIDEBAR: PROBLEM INPUTS ---
+# --- SESSION STATE INITIALIZATION ---
+if 'current_step' not in st.session_state:
+    st.session_state.current_step = 0
+if 'step_verified' not in st.session_state:
+    st.session_state.step_verified = False
+if 'num_constraints' not in st.session_state:
+    st.session_state.num_constraints = 2
+if 'c1' not in st.session_state:
+    st.session_state.c1 = 2.0
+if 'c2' not in st.session_state:
+    st.session_state.c2 = 1.0
+
+# Initialize default constraint keys if not present
+default_A_init = [[1.0, 1.0], [1.0, 0.0], [1.0, 1.0], [1.0, 1.0]]
+default_b_init = [2.0, 1.0, 5.0, 5.0]
+
+for i in range(4):
+    if f"a1_{i}" not in st.session_state:
+        st.session_state[f"a1_{i}"] = default_A_init[i][0]
+    if f"a2_{i}" not in st.session_state:
+        st.session_state[f"a2_{i}"] = default_A_init[i][1]
+    if f"op_{i}" not in st.session_state:
+        st.session_state[f"op_{i}"] = "<="
+    if f"rhs_{i}" not in st.session_state:
+        st.session_state[f"rhs_{i}"] = default_b_init[i]
+
+# --- SIDEBAR: PROBLEM FORMULATION & LOCK/RESET ---
 st.sidebar.header("1. Problem Formulation")
 
-num_constraints = st.sidebar.number_input("Number of Constraints", min_value=1, max_value=4, value=2, step=1)
+col_sb1, col_sb2 = st.sidebar.columns(2)
+lock_lpp = col_sb1.toggle("🔒 Lock LPP", value=False)
+
+if col_sb2.button("🔄 Reset LPP"):
+    st.session_state.num_constraints = 2
+    st.session_state.c1 = 2.0
+    st.session_state.c2 = 1.0
+    for i in range(4):
+        st.session_state[f"a1_{i}"] = default_A_init[i][0]
+        st.session_state[f"a2_{i}"] = default_A_init[i][1]
+        st.session_state[f"op_{i}"] = "<="
+        st.session_state[f"rhs_{i}"] = default_b_init[i]
+    st.session_state.current_step = 0
+    st.session_state.step_verified = False
+    st.rerun()
+
+num_constraints = st.sidebar.number_input("Number of Constraints", min_value=1, max_value=4, key="num_constraints", disabled=lock_lpp, step=1)
 
 st.sidebar.subheader("Objective Function (Max Z)")
 col_c1, col_c2 = st.sidebar.columns(2)
-c1 = col_c1.number_input("c1 (for x1)", value=2.0, step=0.5)
-c2 = col_c2.number_input("c2 (for x2)", value=1.0, step=0.5)
+c1 = col_c1.number_input("c1 (for x1)", key="c1", disabled=lock_lpp, step=0.5)
+c2 = col_c2.number_input("c2 (for x2)", key="c2", disabled=lock_lpp, step=0.5)
 
 st.sidebar.subheader("Constraints")
 A_inputs, b_inputs, ops = [], [], []
-
-default_A = [[1.0, 1.0], [1.0, 0.0], [1.0, 1.0], [1.0, 1.0]]
-default_b = [2.0, 1.0, 5.0, 5.0]
 
 for i in range(int(num_constraints)):
     st.sidebar.markdown(f"**Constraint {i+1}**")
     ca1, ca2, cop, crhs = st.sidebar.columns([2, 2, 2, 2])
     
-    def_a1 = default_A[i][0] if i < len(default_A) else 1.0
-    def_a2 = default_A[i][1] if i < len(default_A) else 1.0
-    def_rhs = default_b[i] if i < len(default_b) else 5.0
-    
-    a1_val = ca1.number_input(f"x1 (C{i+1})", value=def_a1, key=f"a1_{i}")
-    a2_val = ca2.number_input(f"x2 (C{i+1})", value=def_a2, key=f"a2_{i}")
-    op_val = cop.selectbox(f"Op (C{i+1})", ["<=", ">="], index=0, key=f"op_{i}")
-    rhs_val = crhs.number_input(f"RHS (C{i+1})", value=def_rhs, key=f"rhs_{i}")
+    a1_val = ca1.number_input(f"x1 (C{i+1})", key=f"a1_{i}", disabled=lock_lpp)
+    a2_val = ca2.number_input(f"x2 (C{i+1})", key=f"a2_{i}", disabled=lock_lpp)
+    op_val = cop.selectbox(f"Op (C{i+1})", ["<=", ">="], key=f"op_{i}", disabled=lock_lpp)
+    rhs_val = crhs.number_input(f"RHS (C{i+1})", key=f"rhs_{i}", disabled=lock_lpp)
     
     mult = -1.0 if op_val == ">=" else 1.0
     A_inputs.append([a1_val * mult, a2_val * mult])
@@ -106,7 +148,7 @@ def compute_all_simplex_iterations(c1, c2, A, b_vec):
             if b_var < 2:
                 curr_pt[b_var] = table[idx, -1]
                 
-        # Check Optimality: All z_row coefficients >= 0
+        # Check Optimality
         if np.all(z_row >= -1e-5):
             iterations.append({
                 'table': table.copy(), 'basis': list(basis), 'z_row': z_row.copy(),
@@ -147,12 +189,6 @@ def compute_all_simplex_iterations(c1, c2, A, b_vec):
 
 iterations = compute_all_simplex_iterations(c1, c2, A, b_vec)
 
-# --- SESSION STATE INITIALIZATION ---
-if 'current_step' not in st.session_state:
-    st.session_state.current_step = 0
-if 'step_verified' not in st.session_state:
-    st.session_state.step_verified = False
-
 step = st.session_state.current_step
 iter_data = iterations[min(step, len(iterations)-1)]
 
@@ -161,6 +197,20 @@ iter_title = "0 th Iteration" if step == 0 else f"{step} st Iteration" if step =
 
 # --- SIMPLEX TABLE PRACTICE SECTION ---
 st.markdown(f"### Simplex Table ({iter_title})")
+
+col_tbl1, col_tbl2 = st.columns([1, 4])
+lock_table = col_tbl1.toggle("🔒 Lock Table Inputs", value=False, key=f"lock_tbl_{step}")
+
+if col_tbl1.button("🔄 Reset Table Inputs", key=f"reset_tbl_{step}"):
+    for j in range(len(headers)):
+        st.session_state[f"z_{step}_{j}"] = 0.0
+    st.session_state[f"z_b_{step}"] = 0.0
+    for i in range(n_s):
+        for j in range(len(headers)):
+            st.session_state[f"cell_{step}_{i}_{j}"] = 0.0
+        st.session_state[f"b_{step}_{i}"] = 0.0
+    st.session_state.step_verified = False
+    st.rerun()
 
 st.markdown("<div class='tableau-box'>", unsafe_allow_html=True)
 
@@ -180,10 +230,10 @@ z_cols[1].markdown("**z**")
 
 user_z_inputs = []
 for j in range(len(headers)):
-    z_inp = z_cols[2 + j].number_input(f"Z_C{j+1}", value=0.0, step=0.1, key=f"z_{step}_{j}", label_visibility="collapsed")
+    z_inp = z_cols[2 + j].number_input(f"Z_C{j+1}", value=st.session_state.get(f"z_{step}_{j}", 0.0), step=0.1, key=f"z_{step}_{j}", label_visibility="collapsed", disabled=lock_table)
     user_z_inputs.append(z_inp)
 
-z_val_inp = z_cols[-2].number_input(f"Z_b", value=0.0, step=0.1, key=f"z_b_{step}", label_visibility="collapsed")
+z_val_inp = z_cols[-2].number_input(f"Z_b", value=st.session_state.get(f"z_b_{step}", 0.0), step=0.1, key=f"z_b_{step}", label_visibility="collapsed", disabled=lock_table)
 user_z_inputs.append(z_val_inp)
 z_cols[-1].markdown("—")
 
@@ -204,12 +254,11 @@ for i in range(n_s):
     
     row_inputs = []
     for j in range(len(headers)):
-        inp_val = cols[2 + j].number_input(f"R{i+1}_C{j+1}", value=0.0, step=0.1, key=f"cell_{step}_{i}_{j}", label_visibility="collapsed")
+        inp_val = cols[2 + j].number_input(f"R{i+1}_C{j+1}", value=st.session_state.get(f"cell_{step}_{i}_{j}", 0.0), step=0.1, key=f"cell_{step}_{i}_{j}", label_visibility="collapsed", disabled=lock_table)
         row_inputs.append(inp_val)
         
-    b_val_inp = cols[-2].number_input(f"R{i+1}_b", value=0.0, step=0.1, key=f"b_{step}_{i}", label_visibility="collapsed")
+    b_val_inp = cols[-2].number_input(f"R{i+1}_b", value=st.session_state.get(f"b_{step}_{i}", 0.0), step=0.1, key=f"b_{step}_{i}", label_visibility="collapsed", disabled=lock_table)
     
-    # Ratios stay unpopulated until table is completely verified
     if st.session_state.step_verified and not iter_data['is_optimal']:
         if iter_data['key_col'] != -1 and iter_data['key_col'] < len(headers):
             cv = expected_table[i, iter_data['key_col']]
@@ -261,7 +310,74 @@ if btn_verify:
         st.session_state.step_verified = True
         st.rerun()
 
-# --- OPTIMALITY CONDITION & PIVOT DISPLAY ---
+# --- PDF GENERATOR HELPER ---
+def generate_pdf_solution(iterations, headers, c1, c2, n_s):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    styles = getSampleStyleSheet()
+    
+    story = []
+    
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#1e1e2e'), spaceAfter=12)
+    sub_style = ParagraphStyle('SubStyle', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#45475a'), spaceAfter=18)
+    h2_style = ParagraphStyle('H2Style', parent=styles['Heading2'], fontSize=14, textColor=colors.HexColor('#2ea043'), spaceBefore=12, spaceAfter=8)
+    
+    story.append(Paragraph("Simplex Method Solution Report", title_style))
+    story.append(Paragraph(f"Objective Function: Max Z = {c1}x1 + {c2}x2 | Total Iterations: {len(iterations)-1}", sub_style))
+    
+    for idx, it in enumerate(iterations):
+        it_label = "0 th Iteration" if idx == 0 else f"{idx} st Iteration" if idx == 1 else f"{idx} nd Iteration" if idx == 2 else f"{idx} th Iteration"
+        story.append(Paragraph(f"<b>{it_label}</b>", h2_style))
+        
+        table_data = []
+        # Header Row
+        table_data.append(["Iter #", "Basic Var"] + headers + ["R.H.S.", "Ratio"])
+        
+        # Z Row
+        z_row_vals = [f"{val:.2f}" for val in it['table'][-1, :-1]] + [f"{it['table'][-1, -1]:.2f}", "—"]
+        table_data.append([str(idx), "z"] + z_row_vals)
+        
+        # Basic Rows
+        for r_idx in range(n_s):
+            b_var_name = headers[it['basis'][r_idx]]
+            r_vals = [f"{val:.2f}" for val in it['table'][r_idx, :-1]] + [f"{it['table'][r_idx, -1]:.2f}"]
+            
+            ratio_str = "—"
+            if not it['is_optimal'] and it['key_col'] != -1:
+                cv = it['table'][r_idx, it['key_col']]
+                rv = it['table'][r_idx, -1]
+                ratio_str = f"{rv/cv:.2f}" if cv > 1e-5 else "∞"
+                
+            table_data.append(["", b_var_name] + r_vals + [ratio_str])
+            
+        t = Table(table_data)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#89b4fa')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#cdd6f4')),
+            ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#f2cdcd')),
+        ]))
+        
+        story.append(t)
+        story.append(Spacer(1, 12))
+        
+    # Optimal Result Summary
+    opt_it = iterations[-1]
+    opt_pt = opt_it['pt']
+    opt_z = opt_it['table'][-1, -1]
+    
+    story.append(Paragraph("<b>Final Optimal Solution</b>", h2_style))
+    summary_text = f"Optimal Point: x1 = {opt_pt[0]:.2f}, x2 = {opt_pt[1]:.2f} <br/> Maximum Z = {opt_z:.2f}"
+    story.append(Paragraph(summary_text, styles['Normal']))
+    
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+# --- OPTIMALITY CONDITION, PIVOT DISPLAY & ALL TABLES VIEW ---
 if st.session_state.step_verified:
     st.markdown("---")
     
@@ -279,6 +395,62 @@ if st.session_state.step_verified:
             </p>
         </div>
         """, unsafe_allow_html=True)
+        
+        # --- ALL SIMPLEX TABLES AT A GLANCE & PDF DOWNLOAD ---
+        st.markdown("### 📊 Complete Solution: All Simplex Tables at a Glance")
+        
+        # Download PDF Button
+        pdf_data = generate_pdf_solution(iterations, headers, c1, c2, n_s)
+        st.download_button(
+            label="📥 Download Complete Solution PDF Report",
+            data=pdf_data,
+            file_name="Simplex_Solution_Report.pdf",
+            mime="application/pdf",
+            type="primary"
+        )
+        
+        # Display all iteration tables sequentially
+        for idx, it in enumerate(iterations):
+            it_lbl = "0 th Iteration" if idx == 0 else f"{idx} st Iteration" if idx == 1 else f"{idx} nd Iteration" if idx == 2 else f"{idx} th Iteration"
+            with st.expander(f"📌 {it_lbl} Table View", expanded=True):
+                tbl = it['table']
+                
+                # Header
+                h_cols = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.8, 1.5])
+                h_cols[0].markdown("**Iter #**")
+                h_cols[1].markdown("**Basic Var**")
+                for j_idx, h in enumerate(headers):
+                    h_cols[2 + j_idx].markdown(f"**{h}**")
+                h_cols[-2].markdown("**R.H.S.**")
+                h_cols[-1].markdown("**Ratio**")
+                
+                # Z row
+                z_c = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.8, 1.5])
+                z_c[0].write(str(idx))
+                z_c[1].write("z")
+                for j_idx in range(len(headers)):
+                    z_c[2 + j_idx].write(f"{tbl[-1, j_idx]:.2f}")
+                z_c[-2].write(f"{tbl[-1, -1]:.2f}")
+                z_c[-1].write("—")
+                
+                st.markdown("<div class='dotted-divider'></div>", unsafe_allow_html=True)
+                
+                # Basic Rows
+                for r_idx in range(n_s):
+                    r_cols = st.columns([1.5, 1.5] + [1.2] * len(headers) + [1.8, 1.5])
+                    r_cols[0].write("")
+                    r_cols[1].write(headers[it['basis'][r_idx]])
+                    for j_idx in range(len(headers)):
+                        r_cols[2 + j_idx].write(f"{tbl[r_idx, j_idx]:.2f}")
+                    r_cols[-2].write(f"{tbl[r_idx, -1]:.2f}")
+                    
+                    ratio_str = "—"
+                    if not it['is_optimal'] and it['key_col'] != -1:
+                        cv = tbl[r_idx, it['key_col']]
+                        rv = tbl[r_idx, -1]
+                        ratio_str = f"{rv/cv:.2f}" if cv > 1e-5 else "∞"
+                    r_cols[-1].write(ratio_str)
+
     else:
         k_col = iter_data['key_col']
         k_row = iter_data['key_row']
