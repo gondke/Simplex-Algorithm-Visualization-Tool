@@ -602,7 +602,6 @@ with tab1:
         ))
 
     # 5. Full Trajectory Path Trace with Vector Arrows
-    # Displays all points up to current_step (or all iterations if completed)
     display_step = len(iterations) - 1 if iter_data['is_optimal'] else step
     full_path_pts = [it['pt'] for it in iterations[:display_step+1]]
     px = [p[0] for p in full_path_pts]
@@ -622,7 +621,7 @@ with tab1:
         hoverinfo='text'
     ))
 
-    # Directional Vector Annotations (Arrows) along the trajectory path
+    # Directional Vector Annotations (Arrows) along the 2D trajectory path
     path_annotations = []
     for idx in range(len(full_path_pts) - 1):
         p_start = full_path_pts[idx]
@@ -665,7 +664,7 @@ with tab1:
 
     st.plotly_chart(fig2d, use_container_width=True)
 
-# --- TAB 2: 3D OBJECTIVE SURFACE WITH BASE PLANE PROJECTION ---
+# --- TAB 2: 3D OBJECTIVE SURFACE WITH BASE PLANE PROJECTION & 3D VECTORS ---
 with tab2:
     x1_a = np.linspace(0, 4, 30)
     x2_a = np.linspace(0, 4, 30)
@@ -712,8 +711,31 @@ with tab2:
         textposition="top center",
         name="Objective Path"
     ))
-    
-    # 4. Perpendicular Drop Line from Objective Surface to Base Plane
+
+    # 4. 3D Directional Vector Arrows along the trajectory surface
+    if len(px) > 1:
+        for idx in range(len(px) - 1):
+            u_vec = px[idx+1] - px[idx]
+            v_vec = py[idx+1] - py[idx]
+            w_vec = pz[idx+1] - pz[idx]
+            
+            # Midpoint placement for directional cone arrowhead
+            cone_x = px[idx] + 0.7 * u_vec
+            cone_y = py[idx] + 0.7 * v_vec
+            cone_z = pz[idx] + 0.7 * w_vec
+            
+            fig3d.add_trace(go.Cone(
+                x=[cone_x], y=[cone_y], z=[cone_z],
+                u=[u_vec], v=[v_vec], w=[w_vec],
+                sizemode="absolute",
+                sizeref=0.3,
+                colorscale=[[0, '#f9e2af'], [1, '#f9e2af']],
+                showscale=False,
+                name=f"3D Vector {idx}->{idx+1}",
+                hoverinfo="skip"
+            ))
+
+    # 5. Perpendicular Drop Line from Objective Surface to Base Plane
     opt_x1, opt_x2 = curr_pt[0], curr_pt[1]
     opt_z = c1 * opt_x1 + c2 * opt_x2
     
