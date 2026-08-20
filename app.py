@@ -518,7 +518,7 @@ def sort_polygon_vertices(points):
     angles = np.arctan2(pts[:, 1] - cy, pts[:, 0] - cx)
     return pts[np.argsort(angles)]
 
-# --- TAB 1: INTERACTIVE 2D PLOT WITH HOVER TOOLTIPS ---
+# --- TAB 1: INTERACTIVE 2D PLOT WITH HOVER TOOLTIPS & DIRECTIONAL VECTORS ---
 with tab1:
     fig2d = go.Figure()
 
@@ -571,7 +571,7 @@ with tab1:
                 hoverinfo="skip"
             ))
 
-    # 3. Infeasible Basic Solution Intersection Points (Hover Enabled)
+    # 3. Infeasible Basic Solution Intersection Points
     if bs_points:
         bs_x = [p[0] for p in bs_points]
         bs_y = [p[1] for p in bs_points]
@@ -586,7 +586,7 @@ with tab1:
             hoverinfo='text'
         ))
 
-    # 4. Feasible Basic Corner Points (BFS) (Hover Enabled)
+    # 4. Feasible Basic Corner Points (BFS)
     if bfs_points:
         bfs_x = [p[0] for p in bfs_points]
         bfs_y = [p[1] for p in bfs_points]
@@ -601,13 +601,16 @@ with tab1:
             hoverinfo='text'
         ))
 
-    # 5. Full Trajectory Path Trace
-    full_path_pts = [it['pt'] for it in iterations[:step+1]]
+    # 5. Full Trajectory Path Trace with Vector Arrows
+    # Displays all points up to current_step (or all iterations if completed)
+    display_step = len(iterations) - 1 if iter_data['is_optimal'] else step
+    full_path_pts = [it['pt'] for it in iterations[:display_step+1]]
     px = [p[0] for p in full_path_pts]
     py = [p[1] for p in full_path_pts]
     pz = [c1 * p[0] + c2 * p[1] for p in full_path_pts]
     path_hover = [f"<b>Iteration {i} Path Point</b><br>x1: {p[0]:.2f}<br>x2: {p[1]:.2f}<br>Z: {z:.2f}" for i, (p, z) in enumerate(zip(full_path_pts, pz))]
 
+    # Line Trace for Path
     fig2d.add_trace(go.Scatter(
         x=px, y=py, mode='lines+markers+text',
         line=dict(color='#fab387', width=3),
@@ -618,6 +621,24 @@ with tab1:
         hovertext=path_hover,
         hoverinfo='text'
     ))
+
+    # Directional Vector Annotations (Arrows) along the trajectory path
+    path_annotations = []
+    for idx in range(len(full_path_pts) - 1):
+        p_start = full_path_pts[idx]
+        p_end = full_path_pts[idx + 1]
+        
+        path_annotations.append(dict(
+            ax=p_start[0], ay=p_start[1],
+            x=p_end[0], y=p_end[1],
+            xref="x", yref="y",
+            axref="x", ayref="y",
+            showarrow=True,
+            arrowhead=3,
+            arrowsize=1.5,
+            arrowwidth=2.5,
+            arrowcolor='#f9e2af'
+        ))
 
     # 6. Highlight Current Active Iteration Point
     curr_z = c1 * curr_pt[0] + c2 * curr_pt[1]
@@ -633,11 +654,12 @@ with tab1:
 
     # Layout Formatting
     fig2d.update_layout(
-        title="Interactive 2D Feasible Region & Corner Trajectory",
+        title="Interactive 2D Feasible Region & Directional Vector Trajectory",
         xaxis=dict(title="x1 (Decision Variable 1)", range=[-0.5, 4.0], zeroline=True, zerolinecolor='#00f5ff', zerolinewidth=2),
         yaxis=dict(title="x2 (Decision Variable 2)", range=[-0.5, 4.0], zeroline=True, zerolinecolor='#39ff14', zerolinewidth=2),
         height=600,
         template="plotly_dark",
+        annotations=path_annotations,
         hoverlabel=dict(bgcolor="#181825", font_size=13, font_family="Arial")
     )
 
@@ -675,7 +697,8 @@ with tab2:
         ))
 
     # 3. Trajectory Path on 3D Objective Surface
-    path_pts = [it['pt'] for it in iterations[:step+1]]
+    display_step = len(iterations) - 1 if iter_data['is_optimal'] else step
+    path_pts = [it['pt'] for it in iterations[:display_step+1]]
     px = [p[0] for p in path_pts]
     py = [p[1] for p in path_pts]
     pz = [c1*x + c2*y for x, y in zip(px, py)]
